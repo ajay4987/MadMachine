@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { ToastContainer,toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 
 const App = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [queue, setQueue] = useState([]);
-  const queueRef = useRef(queue);
-
-  // Sync the queueRef with the queue state whenever it changes.
-  useEffect(() => {
-    queueRef.current = queue;
-  }, [queue]);
+  const [queue, setQueue] = useState(0);
+  const [isBusy,setIsBusy] = useState(false)
 
   // Set up event listeners to detect when the user goes online or offline.
   useEffect(() => {
@@ -24,8 +22,9 @@ const App = () => {
 
   // Process the queue when the user is online.
   useEffect(() => {
-    if (isOnline && queue.length > 0) {
-      processQueue();
+    if (isOnline && queue > 0) {
+      processQueue(queue);
+      setIsBusy(true)
     }
   }, [isOnline]);
 
@@ -38,37 +37,44 @@ const App = () => {
   };
 
   // Send requests in the queue when the user is online.
-  const processQueue = async () => {
-    while (queueRef.current.length > 0 && isOnline) {
-      const request = queueRef.current.shift();
-      try {
-        await axios.post("https://webhook.site/5e9cb9d0-954c-4d56-830b-bd9a3b952dd3", request);
-        console.log("Request sent:", request);
-      } catch (error) {
-        console.error("Failed to send request:", error);
-        queueRef.current.unshift(request); // Re-add failed request to the front of the queue.
-        break;
-      }
+
+  const processQueue = async (local_queue) => {
+    const resp  = await handleAPICall()
+    if(local_queue-1 !== 0){
+      processQueue(local_queue-1)
+    }else{
+      setQueue(0)
     }
-    setQueue([...queueRef.current]); // Update the queue state.
+    
   };
 
-  const handleClick = () => {
-    const request = { timestamp: new Date().toISOString() };
-
-    if (isOnline) {
+  const handleAPICall = async () =>{
+    return new Promise((resolve)=>{
       axios
-        .post("https://webhook.site/5e9cb9d0-954c-4d56-830b-bd9a3b952dd3", request)
-        .then((response) => {
-          console.log("Request sent:", response.data);
-        })
-        .catch((error) => {
-          console.error("Failed to send request:", error);
-          setQueue([...queue, request]);
-        });
+      .post("https://webhook.site/5e9cb9d0-954c-4d56-830b-bd9a3b952dd3")
+      .then((response) => {
+        console.log("Request sent:", response.data);
+        resolve()
+      })
+      .catch((error) => {
+        console.error("Failed to send request:", error);
+        resolve()
+      });
+    })
+  }
+
+  const handleClick = () => {
+
+    if (isOnline && !isBusy) {
+      handleAPICall()
     } else {
-      setQueue([...queue, request]); // Queue the request if offline.
-      console.log("Request buffered:", request);
+      if(isBusy){
+        toast("Please waiting finshing queue")
+        return
+      }
+      console.log("entered")
+      toast(`Requests in queue ${queue+1}`)
+      setQueue((queue)=>queue+1)
     }
   };
 
@@ -77,6 +83,7 @@ const App = () => {
       <button onClick={handleClick} style={{ padding: "10px 20px", fontSize: "16px" }}>
         Hit Me
       </button>
+      <ToastContainer />
     </div>
   );
 };
